@@ -169,6 +169,16 @@ def _check_device(
         )
 
 
+def _check_infrastructure(
+    args: argparse.Namespace,
+    device: str,
+    package: str,
+) -> None:
+    """Fail fast when a task error is caused by shared runtime infrastructure."""
+    _check_device(args.adb, device, args.adb_server_port, {package})
+    _check_api(args.base_url, args.model, args.api_key)
+
+
 def _git_revision() -> dict[str, Any]:
     commit = subprocess.run(
         ["git", "rev-parse", "HEAD"], cwd=ROOT, check=True,
@@ -340,6 +350,10 @@ def _run_task(
         step_start = time.perf_counter()
         result = agent.step(task.instruction, task_name=task.key)
         data = result.data
+        if data.get("model_response") == "Error calling LLM":
+            raise RuntimeError("Local model endpoint exhausted all request retries.")
+        if data.get("error"):
+            raise RuntimeError(f"Agent step failed: {data['error']}")
         _save_image(task_dir / f"screenshot_{step_id:03d}_before.png", data.get("before_screenshot"))
         _save_image(task_dir / f"screenshot_{step_id:03d}_after.png", data.get("after_screenshot"))
         step = _serializable_step(step_id, data, time.perf_counter() - step_start)
@@ -432,6 +446,7 @@ def run(args: argparse.Namespace) -> int:
             _write_json(task_dir / "task.json", asdict(task))
             started_at = _utcnow()
             error = None
+            infrastructure_error = None
             status = "completed"
             summary: dict[str, Any] = {}
             package = APP_PACKAGES[task.app]
@@ -457,6 +472,12 @@ def run(args: argparse.Namespace) -> int:
                 except Exception as exc:
                     error = (error + "; " if error else "") + f"reset: {exc}"
 
+            if error:
+                try:
+                    _check_infrastructure(args, device, package)
+                except Exception as exc:
+                    infrastructure_error = f"{type(exc).__name__}: {exc}"
+
             _write_json(
                 result_path,
                 {
@@ -479,6 +500,11 @@ def run(args: argparse.Namespace) -> int:
                 f"remaining={progress['remaining']}",
                 flush=True,
             )
+            if infrastructure_error:
+                raise RuntimeError(
+                    "Benchmark infrastructure became unavailable after "
+                    f"{task.key}: {infrastructure_error}"
+                )
     finally:
         env.close()
     return 0
