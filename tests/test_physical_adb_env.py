@@ -52,6 +52,21 @@ class PhysicalAdbEnvTest(unittest.TestCase):
 
     @mock.patch("eval.envs.physical_adb_env.time.sleep")
     @mock.patch.object(subprocess, "run")
+    def test_screenshot_retries_transient_invalid_payload(self, run, sleep):
+        run.side_effect = [
+            _result("device\n"),
+            _result(_png()),
+            _result(b"transient adb tunnel error"),
+            _result(_png()),
+        ]
+        env = PhysicalAdbEnv("/sdk/adb", "phone", adb_server_port=15038)
+        state = env.get_state()
+
+        self.assertEqual(state.pixels.shape, (2, 3, 3))
+        sleep.assert_called_once_with(0.5)
+
+    @mock.patch("eval.envs.physical_adb_env.time.sleep")
+    @mock.patch.object(subprocess, "run")
     def test_utf8_input_waits_for_ime_and_broadcast(self, run, sleep):
         run.side_effect = [
             _result("device\n"),

@@ -12,6 +12,7 @@ from typing import Mapping
 
 import numpy as np
 from PIL import Image
+from PIL import UnidentifiedImageError
 
 from android_world.env import interface
 from android_world.env import json_action
@@ -76,10 +77,18 @@ class PhysicalAdbEnv(interface.AsyncEnv):
         return result.stdout
 
     def _screenshot(self) -> np.ndarray:
-        payload = self._run("exec-out", "screencap", "-p")
-        assert isinstance(payload, bytes)
-        with Image.open(io.BytesIO(payload)) as image:
-            return np.asarray(image.convert("RGB")).copy()
+        last_error: Exception | None = None
+        for attempt in range(3):
+            payload = self._run("exec-out", "screencap", "-p")
+            assert isinstance(payload, bytes)
+            try:
+                with Image.open(io.BytesIO(payload)) as image:
+                    return np.asarray(image.convert("RGB")).copy()
+            except (OSError, UnidentifiedImageError) as exc:
+                last_error = exc
+                if attempt < 2:
+                    time.sleep(0.5 * (attempt + 1))
+        raise RuntimeError("ADB returned an invalid screenshot three times.") from last_error
 
     @property
     def controller(self):
