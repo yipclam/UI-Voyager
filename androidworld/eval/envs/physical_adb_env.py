@@ -115,10 +115,15 @@ class PhysicalAdbEnv(interface.AsyncEnv):
                 "shell", "ime", "enable", "com.android.adbkeyboard/.AdbIME"
             )
             self._run("shell", "ime", "set", "com.android.adbkeyboard/.AdbIME")
+            # IME activation and broadcast handling are asynchronous on some
+            # physical devices. Restoring the original IME immediately can
+            # truncate or corrupt CJK input even though `am broadcast` exits 0.
+            time.sleep(0.5)
             self._run(
                 "shell", "am", "broadcast", "-a", "ADB_INPUT_B64",
                 "--es", "msg", encoded,
             )
+            time.sleep(0.2)
         finally:
             if original_ime and original_ime != "null":
                 self._run("shell", "ime", "set", original_ime, check=False)

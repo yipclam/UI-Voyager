@@ -50,6 +50,30 @@ class PhysicalAdbEnvTest(unittest.TestCase):
             ["/sdk/adb", "-P", "15038", "-s", "phone", "shell", "input", "tap", "2", "1"],
         )
 
+    @mock.patch("eval.envs.physical_adb_env.time.sleep")
+    @mock.patch.object(subprocess, "run")
+    def test_utf8_input_waits_for_ime_and_broadcast(self, run, sleep):
+        run.side_effect = [
+            _result("device\n"),
+            _result(_png()),
+            _result("original/.Ime\n"),
+            _result(),
+            _result(),
+            _result(),
+            _result(),
+            _result(),
+        ]
+        env = PhysicalAdbEnv("/sdk/adb", "phone", adb_server_port=15038)
+        env.execute_action(
+            json_action.JSONAction(action_type="input_text", text="九重紫")
+        )
+
+        self.assertEqual(sleep.call_args_list, [mock.call(0.5), mock.call(0.2)])
+        self.assertIn(
+            ["shell", "am", "broadcast", "-a", "ADB_INPUT_B64", "--es", "msg", "5Lmd6YeN57Sr"],
+            [call.args[0][-8:] for call in run.call_args_list],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
