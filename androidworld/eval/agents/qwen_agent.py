@@ -113,11 +113,28 @@ class QwenAgent(BaseEvalAgent):
         text_prompt = self._construct_prompt(goal)
         
         try:
+            request_start = time.perf_counter()
             response, raw_response = self.llm_client.predict_mm(
                 text_prompt=text_prompt,
                 images=[processed_image],
                 system_prompt=self.system_prompt,
             )
+            request_latency_s = time.perf_counter() - request_start
+            usage = raw_response.get('usage', {}) if isinstance(raw_response, dict) else {}
+            step_data['request_latency_s'] = round(request_latency_s, 4)
+            step_data['decision_latency_s'] = round(request_latency_s, 4)
+            step_data['usage'] = {
+                'prompt_tokens': usage.get('prompt_tokens'),
+                'completion_tokens': usage.get('completion_tokens'),
+                'total_tokens': usage.get('total_tokens'),
+                'cached_tokens': (
+                    usage.get('prompt_tokens_details', {}) or {}
+                ).get('cached_tokens'),
+                'reasoning_tokens': (
+                    usage.get('completion_tokens_details', {}) or {}
+                ).get('reasoning_tokens'),
+                'visual_tokens': None,
+            }
             
             step_data['model_response'] = response
             logging.info(f'Model response: {response}')

@@ -76,3 +76,6 @@ eval/benchmark/agentnetbench/output/
 venv/
 ENV/
 .venv/
+
+# Physical-device benchmark artifacts
+runs/
