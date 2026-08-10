@@ -17,6 +17,8 @@ AndroidEnv gRPC accessibility backend.
 - A model `terminate` action only stops the trajectory. It is not a benchmark
   success label. Success remains `null` until screenshot/trajectory review.
 - No supervised user interaction is accepted during the formal run.
+- Invalid screenshots from a remote ADB tunnel use bounded retry with backoff;
+  a task fails only after ten consecutive undecodable captures.
 
 ## Environment
 

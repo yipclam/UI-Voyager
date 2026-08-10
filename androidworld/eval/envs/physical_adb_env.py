@@ -26,6 +26,8 @@ class PhysicalAdbEnv(interface.AsyncEnv):
     executes the official JSONAction space directly through ADB.
     """
 
+    _SCREENSHOT_ATTEMPTS = 10
+
     def __init__(
         self,
         adb_path: str | Path,
@@ -78,7 +80,7 @@ class PhysicalAdbEnv(interface.AsyncEnv):
 
     def _screenshot(self) -> np.ndarray:
         last_error: Exception | None = None
-        for attempt in range(3):
+        for attempt in range(self._SCREENSHOT_ATTEMPTS):
             payload = self._run("exec-out", "screencap", "-p")
             assert isinstance(payload, bytes)
             try:
@@ -86,9 +88,11 @@ class PhysicalAdbEnv(interface.AsyncEnv):
                     return np.asarray(image.convert("RGB")).copy()
             except (OSError, UnidentifiedImageError) as exc:
                 last_error = exc
-                if attempt < 2:
-                    time.sleep(0.5 * (attempt + 1))
-        raise RuntimeError("ADB returned an invalid screenshot three times.") from last_error
+                if attempt < self._SCREENSHOT_ATTEMPTS - 1:
+                    time.sleep(min(0.5 * (attempt + 1), 2.0))
+        raise RuntimeError(
+            f"ADB returned an invalid screenshot {self._SCREENSHOT_ATTEMPTS} times."
+        ) from last_error
 
     @property
     def controller(self):

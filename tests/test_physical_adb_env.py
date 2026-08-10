@@ -67,6 +67,25 @@ class PhysicalAdbEnvTest(unittest.TestCase):
 
     @mock.patch("eval.envs.physical_adb_env.time.sleep")
     @mock.patch.object(subprocess, "run")
+    def test_screenshot_retry_is_bounded(self, run, sleep):
+        run.side_effect = [
+            _result("device\n"),
+            _result(_png()),
+            *[_result(b"invalid") for _ in range(10)],
+        ]
+        env = PhysicalAdbEnv("/sdk/adb", "phone", adb_server_port=15038)
+
+        with self.assertRaisesRegex(RuntimeError, "10 times"):
+            env.get_state()
+
+        self.assertEqual(sleep.call_count, 9)
+        self.assertEqual(
+            [call.args[0] for call in sleep.call_args_list],
+            [0.5, 1.0, 1.5, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0],
+        )
+
+    @mock.patch("eval.envs.physical_adb_env.time.sleep")
+    @mock.patch.object(subprocess, "run")
     def test_utf8_input_waits_for_ime_and_broadcast(self, run, sleep):
         run.side_effect = [
             _result("device\n"),
